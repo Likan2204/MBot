@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hacksaw Mines Tracker Pro</title>
+    <style>
+        body { background: #0b0e14; color: #ffffff; font-family: -apple-system, sans-serif; text-align: center; margin: 0; padding: 15px; }
+        .container { max-width: 340px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 15px 0; }
+        .cell { aspect-ratio: 1; background: #1a2232; border: 1px solid #2c3a57; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; user-select: none; color: #5f7596; }
+        .cell.clicked { background: #10b981; color: #ffffff; border-color: #059669; }
+        .panel { background: #111827; padding: 12px; border-radius: 8px; text-align: left; font-size: 14px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3); }
+        .select-bet { width: 100%; padding: 10px; background: #1f2937; color: #fff; border: 1px solid #374151; border-radius: 6px; margin: 10px 0; font-size: 15px; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
+        button { padding: 12px; border: none; border-radius: 6px; font-weight: bold; color: #fff; cursor: pointer; font-size: 14px; }
+        .btn-win { background: #059669; } .btn-lose { background: #dc2626; }
+        .history { background: #00000066; border-radius: 6px; height: 120px; overflow-y: auto; text-align: left; padding: 10px; font-size: 12px; color: #9ca3af; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3 style="margin-bottom: 5px;">Mines Tracker (Hacksaw Style)</h3>
+        <p style="color: #6b7280; font-size: 11px; margin: 0;">Configurado para 3 minas fijas</p>
+        
+        <!-- Selector de apuestas en ARS -->
+        <select class="select-bet" id="bet-amount" onchange="actualizarInterfaz()">
+            <option value="22">Apuesta: $22.00 ARS</option>
+            <option value="44">Apuesta: $44.00 ARS</option>
+            <option value="66">Apuesta: $66.00 ARS</option>
+            <option value="88">Apuesta: $88.00 ARS</option>
+        </select>
+
+        <div class="grid" id="board"></div>
+        
+        <div class="panel">
+            <div id="txt-mult" style="color: #38bdf8; font-weight: bold; font-size: 16px;">Multiplicador: x1.00</div>
+            <div id="txt-ganancia" style="color: #a7f3d0; font-weight: bold; font-size: 15px; margin-bottom: 8px;">Ganancia Actual: $0.00 ARS</div>
+            <hr style="border-color: #1f2937; margin: 8px 0;">
+            <div id="txt-riesgo" style="color: #10b981; font-weight: bold;">Riesgo de Bomba: 0.00%</div>
+            <div id="txt-consejo" style="font-style: italic; color: #9ca3af; font-size: 12px; margin-top: 4px;">Estado: Seguro para iniciar.</div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-win" onclick="finalizarPartida('WIN')">💰 ¡Me Retiro!</button>
+            <button class="btn-lose" onclick="finalizarPartida('LOSE')">💥 Exploté</button>
+        </div>
+
+        <h5 style="text-align: left; margin: 10px 0 5px 0;">Historial de Decisiones:</h5>
+        <div class="history" id="history-box"></div>
+    </div>
+
+    <script>
+        // Multiplicadores oficiales aproximados para 3 minas en Hacksaw (retorno matemático real)
+        const MULTIPLICADORES_3_MINAS = {
+            0: 1.00,
+            1: 1.09, // 1er diamante exitoso
+            2: 1.24, 
+            3: 1.41, 
+            4: 1.62, 
+            5: 1.87, 
+            6: 2.17, 
+            7: 2.54, 
+            8: 2.99, 
+            9: 3.56, 
+            10: 4.28,
+            11: 5.20,
+            12: 6.42,
+            13: 8.07,
+            14: 10.33,
+            15: 13.52,
+            16: 18.15,
+            17: 25.13,
+            18: 36.21,
+            19: 55.12,
+            20: 90.03,
+            21: 163.45,
+            22: 365.12
+        };
+
+        const MINAS = 3;
+        let clicsExitosos = 0;
+        let totalPartidas = 0;
+
+        const board = document.getElementById('board');
+        const betAmountSelect = document.getElementById('bet-amount');
+        const txtMult = document.getElementById('txt-mult');
+        const txtGanancia = document.getElementById('txt-ganancia');
+        const txtRiesgo = document.getElementById('txt-riesgo');
+        const txtConsejo = document.getElementById('txt-consejo');
+        const historyBox = document.getElementById('history-box');
+
+        function crearTablero() {
+            board.innerHTML = '';
+            clicsExitosos = 0;
+            for (let i = 1; i <= 25; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.innerText = i;
+                cell.onclick = () => clickCasilla(cell);
+                board.appendChild(cell);
+            }
+            actualizarInterfaz();
+        }
+
+        function clickCasilla(cell) {
+            if (cell.classList.contains('clicked') || clicsExitosos >= 22) return;
+            cell.classList.add('clicked');
+            cell.innerText = '💎';
+            clicsExitosos++;
+            actualizarInterfaz();
+        }
+
+        function actualizarInterfaz() {
+            let bet = parseFloat(betAmountSelect.value);
+            let mult = MULTIPLICADORES_3_MINAS[clicsExitosos] || 1.00;
+            let ganancia = bet * mult;
+            
+            let casillasRestantes = 25 - clicsExitosos;
+            let riesgo = (MINAS / casillasRestantes) * 100;
+
+            txtMult.innerText = `Multiplicador: x${mult.toFixed(2)}`;
+            txtGanancia.innerText = `Ganancia Actual: $${ganancia.toFixed(2)} ARS`;
+            txtRiesgo.innerText = `Riesgo de Bomba: ${riesgo.toFixed(2)}%`;
+
+            if (riesgo > 35) {
+                txtRiesgo.style.color = '#dc2626';
+                txtConsejo.innerText = '⚠️ RIESGO ALTO. Te sugerimos cobrar tu dinero en Gane.bet';
+            } else if (riesgo > 18) {
+                txtRiesgo.style.color = '#fbbf24';
+                txtConsejo.innerText = '⚡ Riesgo moderado. Cuidado con el siguiente diamante.';
+            } else {
+                txtRiesgo.style.color = '#10b981';
+                txtConsejo.innerText = '✅ Riesgo bajo. Estadísticamente estable.';
+            }
+        }
+
+        function finalizarPartida(resultado) {
+            totalPartidas++;
+            let bet = parseFloat(betAmountSelect.value);
+            let mult = MULTIPLICADORES_3_MINAS[clicsExitosos] || 1.00;
+            let gananciaFinal = bet * mult;
+            let casillasRestantes = 25 - clicsExitosos;
+            let riesgoFijado = (MINAS / casillasRestantes) * 100;
+
+            let logText = "";
+            let color = "";
+
+            if (resultado === "WIN") {
+                logText = `P#${totalPartidas} | Retiro Exitoso | Cobraste: $${gananciaFinal.toFixed(2)} ARS (x${mult.toFixed(2)})`;
+                color = "#34d399";
+            } else {
+                logText = `P#${totalPartidas} | 💥 Bomba | Perdiste: $${bet.toFixed(2)} ARS (Arriesgando al ${riesgoFijado.toFixed(1)}%)`;
+                color = "#f87171";
+            }
+
+            const record = document.createElement('div');
+            record.style.color = color;
+            record.style.marginBottom = "4px";
+            record.innerText = logText;
+            
+            historyBox.insertBefore(record, historyBox.firstChild);
+            crearTablero();
+        }
+
+        crearTablero();
+    </script>
+</body>
+</html>
